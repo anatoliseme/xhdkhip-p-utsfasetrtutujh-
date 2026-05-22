@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "A chat message",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Content of the message"
+        },
+        "videoBase64": {
+          "type": "string",
+          "description": "Base64 encoded video data"
+        },
+        "videoMimeType": {
+          "type": "string",
+          "description": "MIME type for the video"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"],
+          "description": "Who sent the message"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Client timestamp (we will use server timestamp strictly in production rules but number is fine for schema)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Identifier of the user who owns this message"
+        }
+      },
+      "required": ["text", "role", "createdAt", "userId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "number",
+          "description": "When the user profile was created"
+        }
+      },
+      "required": ["createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles"
+    },
+    "users/{userId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/Message"
+      },
+      "description": "Messages belonging to a user"
+    }
+  }
+}

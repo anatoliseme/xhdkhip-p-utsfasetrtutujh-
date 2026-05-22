@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['createdAt']) && data.keys().size() == 1
+        && data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      let keys = data.keys();
+      let hasRequired = keys.hasAll(['text', 'role', 'createdAt', 'userId']);
+      let validSize = keys.size() == 4 || 
+                      (keys.size() == 5 && ('videoBase64' in data || 'videoMimeType' in data)) || 
+                      (keys.size() == 6 && 'videoBase64' in data && 'videoMimeType' in data);
+      return hasRequired && validSize
+        && data.text is string && data.text.size() <= 10000
+        && (data.role == 'user' || data.role == 'assistant')
+        && data.userId is string && data.userId == request.auth.uid
+        && data.createdAt is timestamp
+        && (!('videoBase64' in data) || (data.videoBase64 is string && data.videoBase64.size() <= 800000))
+        && (!('videoMimeType' in data) || (data.videoMimeType is string && data.videoMimeType.size() <= 50));
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId)
+                    && isValidUser(incoming())
+                    && incoming().createdAt == request.time;
+      allow update: if false; // Users are immutable for now
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidId(messageId);
+        allow list: if isSignedIn() && request.auth.uid == userId && isValidId(userId)
+                    && exists(/databases/$(database)/documents/users/$(userId));
+        allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidId(messageId)
+                      && exists(/databases/$(database)/documents/users/$(userId))
+                      && isValidMessage(incoming())
+                      && incoming().createdAt == request.time;
+        allow update: if false; // Messages are immutable
+        allow delete: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidId(messageId);
+      }
+    }
+  }
+}
